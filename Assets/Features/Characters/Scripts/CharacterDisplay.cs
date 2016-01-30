@@ -2,14 +2,16 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-public class CharacterDisplay : MonoBehaviour
+public class Character : MonoBehaviour
 {
-
-	public static CharacterDisplay Create(CharacterData character)
+	public static Character Create(CharacterData character)
 	{
-		var go = new GameObject(character.displayName, typeof(CharacterDisplay));
-		var component = go.GetComponent<CharacterDisplay>();
+		var go = GameObject.Instantiate(PrefabSettings.main.characterDisplayPrefab);
+		go.name = character.name;
+
+		var component = go.GetComponent<Character>();
 		component.character = character;
+
 		return component;
 	}
 

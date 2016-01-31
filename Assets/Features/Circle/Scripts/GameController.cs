@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine.UI;
 using UnityEngine.UI.Extensions;
 using System;
+using UnityEngine.SceneManagement;
 
 public enum Direction
 {
@@ -126,12 +127,21 @@ public class GameController : MonoBehaviour
 	}
 
 	private float roundTime = float.NaN;
+	public float roundTimeRemaining
+	{
+		get
+		{
+			return roundTime;
+		}
+	}
+
 	private void HandleRound()
 	{
 		roundTime -= Time.deltaTime;
 		if (roundTime <= 0)
 		{
-			//RunEvent(GameOver());
+			RunEvent(GameOver());
+			return;
 		}
 
 		var matchCharacters = goalCharacters.ToList();
@@ -143,7 +153,21 @@ public class GameController : MonoBehaviour
 		if (matchedAllCharacters)
 		{
 			RunEvent(RoundSuccess());
+			return;
 		}
+	}
+
+	private IEnumerator GameOver()
+	{
+		var t = 0f;
+		while (t < 1)
+		{
+			rootCanvasGroup.alpha = 1.0f - t;
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+
+		SceneManager.LoadScene("Menu");
 	}
 
 	private IEnumerator RoundSuccess()

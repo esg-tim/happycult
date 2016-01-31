@@ -226,82 +226,95 @@ public class GameController : MonoBehaviour
 		incantationLine.AddPoint(scaled);
 	}
 
+	private Coroutine HandlingMoveCoroutine;
+
 	private void HandleIncantInput(float joyMag, Vector2 joyVector)
 	{
-		if (Input.GetButton("Swap") && joyMag > 0.8f)
+		if (HandlingMoveCoroutine == null && joyMag > 0.8f)
 		{
-			var index = GetIndexInDirection(joyVector);
-
-			if (index != -1)
-			{
-				var left = ((index - 1) + characterMarks.Count) % characterMarks.Count;
-				var right = (index + 1) % characterMarks.Count;
-
-				var a = characterMarks[left];
-				var b = characterMarks[right];
-
-				if (a != null || b != null)
-				{
-					RunEvent(DoSwap(a, b, true));
-				}
-			}
-		}
-		else if (Input.GetButton("Cross") && joyMag > 0.8f)
-		{
-			var index = GetIndexInDirection(joyVector);
-
-			if (index != -1)
-			{
-				var across = (index + characterMarks.Count / 2) % characterMarks.Count;
-
-				var a = characterMarks[index];
-				var b = characterMarks[across];
-
-				if (a != null || b != null)
-				{
-					RunEvent(DoSwap(a, b, false));
-				}
-			}
-		}
-		else if (Input.GetButton("Shift Clockwise"))
-		{
-			if (joyMag > 0.8f)
+			if (Input.GetButton("Cross"))
 			{
 				var index = GetIndexInDirection(joyVector);
 
 				if (index != -1)
 				{
-					RunEvent(DoRotate(Direction.Clockwise, characterMarks[index]));
+					HandlingMoveCoroutine = StartCoroutine(HandleMove(index));
 				}
 			}
-			else
-			{
-				RunEvent(DoRotate(Direction.Clockwise));
-			}
-
-		}
-		else if (Input.GetButton("Shift CounterClockwise"))
-		{
-			if (joyMag > 0.8f)
+			else if (Input.GetButton("Incant"))
 			{
 				var index = GetIndexInDirection(joyVector);
 				if (index != -1)
 				{
-					RunEvent(DoRotate(Direction.CounterClockwise, characterMarks[index]));
+					RunEvent(DoIncant(index));
 				}
 			}
-			else
+		}
+	}
+
+	private IEnumerator HandleMove(int startIndex)
+	{
+		while (Input.GetButton("Cross"))
+		{
+			yield return new WaitForEndOfFrame();
+		}
+
+		var joyVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+		var joyMag = joyVector.magnitude;
+
+		if (joyMag > 0.8f)
+		{
+			var endIndex = GetIndexInDirection(joyVector);
+
+			if (endIndex != -1)
 			{
-				RunEvent(DoRotate(Direction.CounterClockwise));
+				var a = characterMarks[startIndex];
+				var b = characterMarks[endIndex];
+
+				if (a != null || b != null)
+				{
+					var difference = GetIndexDifference(startIndex, endIndex);
+					var absDiff = Mathf.Abs(difference);
+					Debug.Log(string.Format("Difference: {0}, {1} = {2}", startIndex, endIndex, difference));
+
+					if (absDiff == 1)
+					{
+						RunEvent(DoRotate(difference > 0 ? Direction.Clockwise : Direction.CounterClockwise));
+					}
+					else if (absDiff == characterMarks.Count / 2)
+					{
+						RunEvent(DoSwap(a, b, false));
+					}
+					else if (absDiff > 1)
+					{
+						RunEvent(DoSwap(a, b, true));
+					}
+				}
 			}
 		}
-		else if (Input.GetButton("Incant") && joyMag > 0.8f)
+
+		HandlingMoveCoroutine = null;
+	}
+
+	public int GetIndexDifference(int startIndex, int endIndex)
+	{
+		var didSwap = false;
+		if (startIndex > endIndex) {
+			var swap = startIndex;
+			startIndex = endIndex;
+			endIndex = swap;
+			didSwap = true;
+		}
+
+		var optionA = endIndex - startIndex;
+		var optionB = startIndex - (endIndex - characterMarks.Count);
+		if (optionA < optionB)
 		{
-			var index = GetIndexInDirection(joyVector);
-			if (index != -1)
-			{
-				RunEvent(DoIncant(index));
-			}
+			return didSwap ? -optionA : optionA;
+		}
+		else
+		{
+			return didSwap ? optionB : -optionB;
 		}
 	}
 

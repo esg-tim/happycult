@@ -226,19 +226,39 @@ public class GameController : MonoBehaviour
 		incantationLine.AddPoint(scaled);
 	}
 
-	private Coroutine HandlingMoveCoroutine;
-
 	private void HandleIncantInput(float joyMag, Vector2 joyVector)
 	{
-		if (HandlingMoveCoroutine == null && joyMag > 0.8f)
+		if (joyMag > 0.8f)
 		{
 			if (Input.GetButton("Cross"))
 			{
-				var index = GetIndexInDirection(joyVector);
+				var startIndex = GetIndexOfCharacter(mainCharacter);
+				var endIndex = GetIndexInDirection(joyVector);
 
-				if (index != -1)
+				if (endIndex != -1)
 				{
-					HandlingMoveCoroutine = StartCoroutine(HandleMove(index));
+					var a = characterMarks[startIndex];
+					var b = characterMarks[endIndex];
+
+					if (a != null || b != null)
+					{
+						var difference = GetIndexDifference(startIndex, endIndex);
+						var absDiff = Mathf.Abs(difference);
+						Debug.Log(string.Format("Difference: {0}, {1} = {2}", startIndex, endIndex, difference));
+
+						if (absDiff == 1)
+						{
+							RunEvent(DoRotate(difference > 0 ? Direction.Clockwise : Direction.CounterClockwise));
+						}
+						else if (absDiff == characterMarks.Count / 2)
+						{
+							RunEvent(DoSwap(a, b, false));
+						}
+						else if (absDiff > 1)
+						{
+							RunEvent(DoSwap(a, b, true));
+						}
+					}
 				}
 			}
 			else if (Input.GetButton("Incant"))
@@ -250,50 +270,6 @@ public class GameController : MonoBehaviour
 				}
 			}
 		}
-	}
-
-	private IEnumerator HandleMove(int startIndex)
-	{
-		while (Input.GetButton("Cross"))
-		{
-			yield return new WaitForEndOfFrame();
-		}
-
-		var joyVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
-		var joyMag = joyVector.magnitude;
-
-		if (joyMag > 0.8f)
-		{
-			var endIndex = GetIndexInDirection(joyVector);
-
-			if (endIndex != -1)
-			{
-				var a = characterMarks[startIndex];
-				var b = characterMarks[endIndex];
-
-				if (a != null || b != null)
-				{
-					var difference = GetIndexDifference(startIndex, endIndex);
-					var absDiff = Mathf.Abs(difference);
-					Debug.Log(string.Format("Difference: {0}, {1} = {2}", startIndex, endIndex, difference));
-
-					if (absDiff == 1)
-					{
-						RunEvent(DoRotate(difference > 0 ? Direction.Clockwise : Direction.CounterClockwise));
-					}
-					else if (absDiff == characterMarks.Count / 2)
-					{
-						RunEvent(DoSwap(a, b, false));
-					}
-					else if (absDiff > 1)
-					{
-						RunEvent(DoSwap(a, b, true));
-					}
-				}
-			}
-		}
-
-		HandlingMoveCoroutine = null;
 	}
 
 	public int GetIndexDifference(int startIndex, int endIndex)

@@ -44,6 +44,7 @@ public class IncantationData : ScriptableObject
 
 	private bool Match(IEnumerable<GameController.GameMove> gameMoves, IEnumerable<Move> dataMoves)
 	{
+		Debug.Log("Begin Match");
 		if (gameMoves.Count() != dataMoves.Count())
 			return false;
 

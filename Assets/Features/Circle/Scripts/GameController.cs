@@ -33,12 +33,14 @@ public class GameController : MonoBehaviour
 
 	public CharacterData mainCharacterData;
 
-	public int goalCharacterNumber = 4;
+	public int goalCharacterNumber = 3;
 	public Action<Action> goalCharactersChanged;
+	public Action<float, float, Action> addedTime;
 
 	public float startRoundTime;
+	public float gainTimePerRound;
 
-	private List<CharacterData> goalCharacters;
+	private List<CharacterData> goalCharacters = new List<CharacterData>();
 	public IEnumerable<CharacterData> currentGoalCharacters {
 		get
 		{
@@ -123,7 +125,7 @@ public class GameController : MonoBehaviour
 			t += Time.deltaTime;
 		}
 
-		yield return StartCoroutine(RandomizeGoalCharacters());
+		yield return StartCoroutine(AddNewGoalCharacter());
 	}
 
 	private float roundTime = float.NaN;
@@ -172,12 +174,29 @@ public class GameController : MonoBehaviour
 
 	private IEnumerator RoundSuccess()
 	{
-		yield return StartCoroutine(RandomizeGoalCharacters());
+		var before = roundTime;
+		roundTime += gainTimePerRound;
+		var remainingFeedback = 0;
+		if (addedTime != null)
+		{
+			remainingFeedback = addedTime.GetInvocationList().Length;
+
+			addedTime(before, roundTime, () => remainingFeedback--);
+		}
+		while (remainingFeedback > 0)
+			yield return new WaitForEndOfFrame();
+
+		yield return StartCoroutine(AddNewGoalCharacter());
 	}
 
-	private IEnumerator RandomizeGoalCharacters()
+	private IEnumerator AddNewGoalCharacter()
 	{
-		goalCharacters = CharacterData.allCharacterData.Except(Enumerable.Repeat(mainCharacter.characterData, 1)).PickRandom(goalCharacterNumber).ToList();
+		goalCharacters.Add(CharacterData.allCharacterData.Except(Enumerable.Repeat(mainCharacter.characterData, 1)).PickRandom(1).First());
+		if (goalCharacters.Count > goalCharacterNumber)
+		{
+			goalCharacters.RemoveAt(0);
+		}
+
 		var remainingFeedback = 0;
 		if (goalCharactersChanged != null)
 		{
@@ -185,7 +204,7 @@ public class GameController : MonoBehaviour
 
 			goalCharactersChanged(() => remainingFeedback--);
 		}
-		while (remainingFeedback > 0f)
+		while (remainingFeedback > 0)
 			yield return new WaitForEndOfFrame();
 	}
 

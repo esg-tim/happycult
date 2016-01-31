@@ -8,5 +8,5 @@ public abstract class CharacterRule : ScriptableObject
 		return (CharacterRule)ScriptableObject.CreateInstance(t);
 	}
 
-	public abstract bool Check(CircleController controller, Character character);
+	public abstract bool Check(GameController controller, Character character);
 }

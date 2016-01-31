@@ -12,13 +12,15 @@ public enum Direction
 	CounterClockwise
 }
 
-public class CircleController : MonoBehaviour 
+public class GameController : MonoBehaviour 
 {
 	public float moveTime = 1;
 
 	public int startingCharacterCount = 3;
 
 	public List<Transform> characterMarkTransforms;
+
+	public CanvasGroup rootCanvasGroup;
 
 	public Transform characterHolder;
 	public Transform circleCenter;
@@ -30,14 +32,25 @@ public class CircleController : MonoBehaviour
 
 	public CharacterData mainCharacterData;
 
-	private List<CharacterData> requiredCharacters;
+	public int goalCharacterNumber = 4;
+	public Action<Action> goalCharactersChanged;
+
+	public float startRoundTime;
+
+	private List<CharacterData> goalCharacters;
+	public IEnumerable<CharacterData> currentGoalCharacters {
+		get
+		{
+			return goalCharacters.AsEnumerable();
+		}
+	}
 
 	private Character mainCharacter;
 	private List<Character> characters = new List<Character>();
 	private List<CharacterMark> characterMarks = new List<CharacterMark>();
 	private Dictionary<CharacterMark, Character> characterMarkSlots = new Dictionary<CharacterMark, Character>();
 
-	private Coroutine moveCoroutine = null;
+	private Coroutine eventCoroutine = null;
 
 	public class CharacterMark
 	{
@@ -69,6 +82,10 @@ public class CircleController : MonoBehaviour
 		{
 			characterMarkSlots.Add(mark, null);
 		}
+
+		roundTime = startRoundTime;
+
+		RunEvent(StartGame());
 	}
 
 	public void Update()
@@ -88,10 +105,64 @@ public class CircleController : MonoBehaviour
 				slot.Value.transform.position = slot.Key.transform.position;
 		}
 
-		if (moveCoroutine == null)
+		if (eventCoroutine == null)
 		{
+			HandleRound();
 			HandleIncantInput(joyMag, joyVector);
 		}
+	}
+
+	private IEnumerator StartGame()
+	{
+		var t = 0f;
+		while (t < 1)
+		{
+			rootCanvasGroup.alpha = t;
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+
+		yield return StartCoroutine(RandomizeGoalCharacters());
+	}
+
+	private float roundTime = float.NaN;
+	private void HandleRound()
+	{
+		roundTime -= Time.deltaTime;
+		if (roundTime <= 0)
+		{
+			//RunEvent(GameOver());
+		}
+
+		var matchCharacters = goalCharacters.ToList();
+		foreach (var character in characters)
+		{
+			matchCharacters.Remove(character.characterData);
+		}
+		var matchedAllCharacters = matchCharacters.Count == 0;
+		if (matchedAllCharacters)
+		{
+			RunEvent(RoundSuccess());
+		}
+	}
+
+	private IEnumerator RoundSuccess()
+	{
+		yield return StartCoroutine(RandomizeGoalCharacters());
+	}
+
+	private IEnumerator RandomizeGoalCharacters()
+	{
+		goalCharacters = CharacterData.allCharacterData.Except(Enumerable.Repeat(mainCharacter.characterData, 1)).PickRandom(goalCharacterNumber).ToList();
+		var remainingFeedback = 0;
+		if (goalCharactersChanged != null)
+		{
+			remainingFeedback = goalCharactersChanged.GetInvocationList().Length;
+
+			goalCharactersChanged(() => remainingFeedback--);
+		}
+		while (remainingFeedback > 0f)
+			yield return new WaitForEndOfFrame();
 	}
 
 	private void OnCharacterMoved(Character character, MoveType moveType, CharacterMark fromMark, CharacterMark toMark)
@@ -128,7 +199,7 @@ public class CircleController : MonoBehaviour
 
 				if (a != null || b != null)
 				{
-					RunMove(DoSwap(a, b, true));
+					RunEvent(DoSwap(a, b, true));
 				}
 			}
 		}
@@ -145,7 +216,7 @@ public class CircleController : MonoBehaviour
 
 				if (a != null || b != null)
 				{
-					RunMove(DoSwap(a, b, false));
+					RunEvent(DoSwap(a, b, false));
 				}
 			}
 		}
@@ -157,12 +228,12 @@ public class CircleController : MonoBehaviour
 
 				if (index != -1)
 				{
-					RunMove(DoRotate(Direction.Clockwise, characterMarks[index]));
+					RunEvent(DoRotate(Direction.Clockwise, characterMarks[index]));
 				}
 			}
 			else
 			{
-				RunMove(DoRotate(Direction.Clockwise));
+				RunEvent(DoRotate(Direction.Clockwise));
 			}
 
 		}
@@ -173,12 +244,12 @@ public class CircleController : MonoBehaviour
 				var index = GetIndexInDirection(joyVector);
 				if (index != -1)
 				{
-					RunMove(DoRotate(Direction.CounterClockwise, characterMarks[index]));
+					RunEvent(DoRotate(Direction.CounterClockwise, characterMarks[index]));
 				}
 			}
 			else
 			{
-				RunMove(DoRotate(Direction.CounterClockwise));
+				RunEvent(DoRotate(Direction.CounterClockwise));
 			}
 		}
 		else if (Input.GetButton("Incant") && joyMag > 0.8f)
@@ -186,7 +257,7 @@ public class CircleController : MonoBehaviour
 			var index = GetIndexInDirection(joyVector);
 			if (index != -1)
 			{
-				RunMove(DoIncant(index));
+				RunEvent(DoIncant(index));
 			}
 		}
 	}
@@ -225,16 +296,16 @@ public class CircleController : MonoBehaviour
 		return characterMarkSlots[characterMarks[markIndex]];
 	}
 
-	public void RunMove(IEnumerator move)
+	public void RunEvent(IEnumerator move)
 	{
 		StartCoroutine(RunThenClear(move));
 	}
 
 	public IEnumerator RunThenClear(IEnumerator coroutine)
 	{
-		moveCoroutine = StartCoroutine(coroutine);
-		yield return moveCoroutine;
-		moveCoroutine = null;
+		eventCoroutine = StartCoroutine(coroutine);
+		yield return eventCoroutine;
+		eventCoroutine = null;
 	}
 
 	private class Shift
@@ -279,9 +350,9 @@ public class CircleController : MonoBehaviour
 	public class GameMove
 	{
 		public MoveType type;
-		public CircleController.CharacterMark fromMark;
-		public CircleController.CharacterMark toMark;
-		public CircleController circle;
+		public GameController.CharacterMark fromMark;
+		public GameController.CharacterMark toMark;
+		public GameController circle;
 
 		public bool MatchDataMove(IncantationData.Move move)
 		{
@@ -445,12 +516,12 @@ public class CircleController : MonoBehaviour
 
 		var removingCharacters = new List<Character>();
 
-		if (leftCharacter != null && aggressor.character.beefCharacter == leftCharacter.character)
+		if (leftCharacter != null && aggressor.characterData.beefCharacter == leftCharacter.characterData)
 		{
 			removingCharacters.Add(leftCharacter);
 		}
 
-		if (rightCharacter != null && aggressor.character.beefCharacter == rightCharacter.character)
+		if (rightCharacter != null && aggressor.characterData.beefCharacter == rightCharacter.characterData)
 		{
 			removingCharacters.Add(rightCharacter);
 		}

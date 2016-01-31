@@ -12,15 +12,18 @@ public class CharacterData : ScriptableObject
 	{
 		get
 		{
-			if (_allCharacterData != null)
+			if (_allCharacterData == null)
 			{
-				_allCharacterData = Resources.LoadAll<CharacterData>("");
+				_allCharacterData = (from characterData in Resources.LoadAll<CharacterData>("") where characterData.active select characterData).ToArray();
 			}
-			return _allCharacterData;
+			return _allCharacterData.AsEnumerable();
 		}
 	}
 
+	public bool active = true;
 	public Sprite image;
 	public string displayName;
 	public CharacterData beefCharacter;
+	public Sprite summonSymbol;
+	public Sprite summonBubble;
 }

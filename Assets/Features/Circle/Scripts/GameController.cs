@@ -63,6 +63,14 @@ public class GameController : MonoBehaviour
 
 	private Coroutine eventCoroutine = null;
 
+	public GameMode gameMode
+	{
+		get
+		{
+			return performingIncantation == null ? GameMode.Move : GameMode.Summon;
+		}
+	}
+
 	public class CharacterMark
 	{
 		public Transform transform;
@@ -142,7 +150,7 @@ public class GameController : MonoBehaviour
 
 		if (eventCoroutine == null)
 		{
-			if (performingIncantation == null)
+			if (gameMode == GameMode.Move)
 			{
 				UpdateMoveState();
 			}

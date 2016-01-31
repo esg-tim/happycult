@@ -13,6 +13,12 @@ public enum Direction
 	CounterClockwise
 }
 
+public enum GameMode
+{
+	Move,
+	Summon
+}
+
 public class GameController : MonoBehaviour 
 {
 	public float moveTime = 1;
@@ -101,7 +107,7 @@ public class GameController : MonoBehaviour
 		var joyMag = joyVector.magnitude;
 
 		var indicatorRectTransform = joystickIndicator.GetComponent<RectTransform>();
-	
+
 		var joyPos = joyVector * indicatorRectTransform.parent.GetComponent<RectTransform>().rect.width / 2 + (Vector2)indicatorRectTransform.position;
 		var orderedList = (from mark in characterMarks select new { mark = mark, distance = ((Vector2)mark.transform.position - joyPos).sqrMagnitude }).ToList();
 		orderedList.Sort((x, y) => (int)Mathf.Sign(x.distance - y.distance));
@@ -114,7 +120,7 @@ public class GameController : MonoBehaviour
 			RectTransformUtility.WorldToScreenPoint(null, selectedMark.transform.position),
 			null,
 			out finalPos);
-		
+
 		indicatorRectTransform.anchoredPosition = finalPos;
 
 		if (joyMag < 0.8f)
@@ -133,6 +139,23 @@ public class GameController : MonoBehaviour
 			if (slot.Value != null) 
 				slot.Value.transform.position = slot.Key.transform.position;
 		}
+
+		if (eventCoroutine == null)
+		{
+			if (performingIncantation == null)
+			{
+				UpdateMoveState();
+			}
+			else
+			{
+				UpdateIncantState();
+			}
+		}
+	}
+
+	private void UpdateMoveState()
+	{
+		HandleRound();
 
 		MoveType type = MoveType.None;
 		Direction direction = Direction.Clockwise;
@@ -178,38 +201,44 @@ public class GameController : MonoBehaviour
 			ClearIncantationPreview();
 		}
 
-
-		if (eventCoroutine == null)
+		if (Input.GetButton("Cross"))
 		{
-			HandleRound();
-
-			if (Input.GetButton("Cross"))
+			switch(type)
 			{
-				switch(type)
-				{
-				case MoveType.Shift:
-					RunEvent(DoRotate(direction));
-					break;
-				case MoveType.DoSiDo:
-					RunEvent(DoSwap(a, b, true));
-					break;
-				case MoveType.Cross:
-					RunEvent(DoSwap(a, b, false));
-					break;
-				}
-
-				if (type != MoveType.None) 
-					roundTurns--;
-			}
-			else if (Input.GetButton("Incant"))
-			{
-				var index = highlightedIndex;
-				if (index != -1)
-				{
-					RunEvent(DoIncant(index));
-				}
+			case MoveType.Shift:
+				RunEvent(DoRotate(direction));
+				break;
+			case MoveType.DoSiDo:
+				RunEvent(DoSwap(a, b, true));
+				break;
+			case MoveType.Cross:
+				RunEvent(DoSwap(a, b, false));
+				break;
 			}
 
+			if (type != MoveType.None) 
+				roundTurns--;
+		}
+		else if (Input.GetButton("Incant"))
+		{
+			RunEvent(DoIncant(endIndex));
+		}
+	}
+
+	public void UpdateIncantState()
+	{
+		if (characterMarkSlots.All(x => x.Value != null))
+		{
+			RunEvent(GameOver());
+		}
+
+		if (Input.GetButton("Cross"))
+		{
+			var index = highlightedIndex;
+			if (index != -1 && characterMarkSlots[characterMarks[index]] == null)
+			{
+				RunEvent(DoIncant(index));
+			}
 		}
 	}
 
@@ -237,12 +266,6 @@ public class GameController : MonoBehaviour
 
 	private void HandleRound()
 	{
-		if (roundTurns <= 0)
-		{
-			RunEvent(GameOver());
-			return;
-		}
-
 		var matchCharacters = goalCharacters.ToList();
 		foreach (var character in characters)
 		{
@@ -252,6 +275,12 @@ public class GameController : MonoBehaviour
 		if (matchedAllCharacters)
 		{
 			RunEvent(RoundSuccess());
+			return;
+		}
+
+		if (roundTurns <= 0)
+		{
+			RunEvent(GameOver());
 			return;
 		}
 	}
@@ -400,6 +429,12 @@ public class GameController : MonoBehaviour
 		eventCoroutine = null;
 	}
 
+	private IncantationData performingIncantation;
+	public void RefreshIncantation()
+	{
+		performingIncantation = IncantationData.GetIncantationData(this.currentIncantation);
+	}
+
 	private class Shift
 	{
 		public Shift(MoveType moveType, Character character, CharacterMark fromMark, CharacterMark toMark, Transform circleCenter )
@@ -499,6 +534,8 @@ public class GameController : MonoBehaviour
 
 		yield return StartCoroutine(CheckBeef(characterDisplayA));
 		yield return StartCoroutine(CheckBeef(characterDisplayB));
+
+		RefreshIncantation();
 	}
 
 	public IEnumerator DoRotate(Direction direction, CharacterMark skip = null)
@@ -552,23 +589,22 @@ public class GameController : MonoBehaviour
 
 			yield return StartCoroutine(CheckBeef(shift.character));
 		}
+
+		RefreshIncantation();
 	}
 
 	[SerializeField]
 	private float glowTime = 1.0f;
 	private IEnumerator DoIncant(int targetIndex)
 	{
-		var incantation = this.currentIncantation;
-		this.currentIncantation = new List<GameMove>();
-
 		var originalIncantationLineColor = incantationLine.color;
 
-		var data = characterMarkSlots[characterMarks[targetIndex]] == null ? IncantationData.GetIncantationData(incantation) : null;
+		this.currentIncantation = new List<GameMove>();
 
 		var t = 0f;
 		while (t < 1)
 		{
-			this.incantationLine.color = Color.Lerp(originalIncantationLineColor, data != null ? Color.white : Color.red, t);
+			this.incantationLine.color = Color.Lerp(originalIncantationLineColor, performingIncantation != null ? Color.white : Color.red, t);
 			yield return new WaitForEndOfFrame();
 			t += Time.deltaTime / glowTime;
 		}
@@ -577,17 +613,19 @@ public class GameController : MonoBehaviour
 
 		incantationLine.Clear();
 
-		if (data != null)
+		if (performingIncantation != null)
 		{
 			var targetMark = characterMarks[targetIndex];
 
-			var character = Character.Create(data.summon);
+			var character = Character.Create(performingIncantation.summon);
 			character.transform.SetParent(characterHolder);
 			characters.Add(character);
 
 			characterMarkSlots[targetMark] = character;
 
 			yield return StartCoroutine(CheckBeef(character));
+
+			performingIncantation = null;
 		}
 	}
 

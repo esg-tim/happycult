@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections;
 using System.Linq;
+using UnityEngine.UI;
 
 public enum Direction
 {
@@ -20,6 +21,10 @@ public class CircleController : MonoBehaviour
 	public Transform characterHolder;
 	public Transform circleCenter;
 
+	public Image joystickIndicator;
+
+	private List<CharacterData> requiredCharacters;
+
 	private List<Character> characters = new List<Character>();
 	private List<CharacterMark> characterMarks = new List<CharacterMark>();
 	private Dictionary<CharacterMark, Character> characterMarkSlots = new Dictionary<CharacterMark, Character>();
@@ -33,7 +38,6 @@ public class CircleController : MonoBehaviour
 
 	public void Start()
 	{
-
 		foreach (var markTransform in characterMarkTransforms)
 		{
 			characterMarks.Add(new CharacterMark() { transform = markTransform });
@@ -67,22 +71,82 @@ public class CircleController : MonoBehaviour
 
 	public void Update()
 	{
+		var joyVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+
+		var joyMag = joyVector.magnitude;
+		joystickIndicator.color = Color.Lerp(Color.clear, Color.white, joyMag);
+
+		var indicatorRectTransform = joystickIndicator.GetComponent<RectTransform>();
+
+		indicatorRectTransform.anchoredPosition = joyVector * indicatorRectTransform.parent.GetComponent<RectTransform>().rect.width / 2;
+
 		if (moveCoroutine == null)
 		{
-			var joyVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
-
-			if (joyVector.magnitude > 0.8f)
+			if (Input.GetButton("Fire4") && joyMag > 0.8f)
 			{
 				var index = GetIndexInDirection(joyVector);
-				var left = ((index - 1) + characterMarks.Count) % characterMarks.Count;
-				var right = (index + 1) % characterMarks.Count;
 
-				var a = characterMarks[left];
-				var b = characterMarks[right];
-
-				if (a != null || b != null)
+				if (index != -1)
 				{
-					RunMove(DoSwap(a, b));
+					var left = ((index - 1) + characterMarks.Count) % characterMarks.Count;
+					var right = (index + 1) % characterMarks.Count;
+
+					var a = characterMarks[left];
+					var b = characterMarks[right];
+
+					if (a != null || b != null)
+					{
+						RunMove(DoSwap(a, b, true));
+					}
+				}
+			}
+			else if (Input.GetButton("Fire1") && joyMag > 0.8f)
+			{
+				var index = GetIndexInDirection(joyVector);
+
+				if (index != -1)
+				{
+					var across = (index + characterMarks.Count / 2) % characterMarks.Count;
+
+					var a = characterMarks[index];
+					var b = characterMarks[across];
+
+					if (a != null || b != null)
+					{
+						RunMove(DoSwap(a, b, false));
+					}
+				}
+			}
+			else if (Input.GetButton("Fire3"))
+			{
+				if (joyMag > 0.8f)
+				{
+					var index = GetIndexInDirection(joyVector);
+
+					if (index != -1)
+					{
+						RunMove(DoRotate(Direction.Clockwise, characterMarks[index]));
+					}
+				}
+				else
+				{
+					RunMove(DoRotate(Direction.Clockwise));
+				}
+
+			}
+			else if (Input.GetButton("Fire2"))
+			{
+				if (joyMag > 0.8f)
+				{
+					var index = GetIndexInDirection(joyVector);
+					if (index != -1)
+					{
+						RunMove(DoRotate(Direction.CounterClockwise, characterMarks[index]));
+					}
+				}
+				else
+				{
+					RunMove(DoRotate(Direction.CounterClockwise));
 				}
 			}
 		}
@@ -96,9 +160,18 @@ public class CircleController : MonoBehaviour
 
 	public int GetIndexInDirection(Vector2 vec)
 	{
-		var joyDirection = SignedAngleBetween(Vector2.right, vec);
+		var joyDirection = Vector2Extensions.FullAngle(Vector2.right, vec);
 		var degreesBetweenMarks = 360.0f / characterMarks.Count;
-		return Mathf.RoundToInt(joyDirection / degreesBetweenMarks) % characterMarks.Count;
+		var index = joyDirection / degreesBetweenMarks;
+		var portion = index - (int)index;
+		if (portion < 0.3f || portion > 0.7f)
+		{
+			return Mathf.RoundToInt(index) % characterMarks.Count;
+		}
+		else
+		{
+			return -1;
+		}
 	}
 
 	public int GetIndexOfCharacter(Character character)
@@ -119,21 +192,6 @@ public class CircleController : MonoBehaviour
 		return characterMarkSlots[characterMarks[markIndex]];
 	}
 
-	private float SignedAngleBetween(Vector2 a, Vector2 b)
-	{
-		// angle in [0,180]
-		float angle = Vector3.Angle(a,b);
-		float sign = Mathf.Sign(Vector3.Dot(Vector3.back,Vector3.Cross(a,b)));
-
-		// angle in [-179,180]
-		float signed_angle = angle * sign;
-
-		// angle in [0,360] (not used but included here for completeness)
-		float angle360 =  signed_angle < 0 ? signed_angle + 360 : signed_angle;
-
-		return angle360;
-	}
-
 	public void RunMove(IEnumerator move)
 	{
 		StartCoroutine(RunThenClear(move));
@@ -146,7 +204,44 @@ public class CircleController : MonoBehaviour
 		moveCoroutine = null;
 	}
 
-	public IEnumerator DoSwap(CharacterMark a, CharacterMark b)
+	private class Shift
+	{
+		public Shift(MoveType moveType, Character character, CharacterMark fromMark, CharacterMark toMark, Transform circleCenter )
+		{
+			this.moveType = moveType;
+			this.character = character;
+			this.fromMark = fromMark;
+			this.toMark = toMark;
+			this.circleCenter = circleCenter;
+		}
+
+		public MoveType moveType;
+		public Character character;
+		public CharacterMark fromMark;
+		public CharacterMark toMark;
+
+		private Transform circleCenter;
+
+		public void Interpolate(float t)
+		{
+			if (character == null) return;
+
+			switch (moveType)
+			{
+			case MoveType.Cross:
+				character.transform.position = MoveTypeMath.EvaluateLine(fromMark.transform.position, toMark.transform.position, t);
+				break;
+			case MoveType.DoSiDo:
+				character.transform.position = MoveTypeMath.EvaluateCircle(fromMark.transform.position, toMark.transform.position, circleCenter.position, t, true);
+				break;
+			case MoveType.Shift:
+				character.transform.position = MoveTypeMath.EvaluateCircle(fromMark.transform.position, toMark.transform.position, circleCenter.position, t, false);
+				break;
+			}
+		}
+	}
+
+	public IEnumerator DoSwap(CharacterMark a, CharacterMark b, bool doSiDo)
 	{
 		var characterDisplayA = characterMarkSlots[a];
 		var characterDisplayB = characterMarkSlots[b];
@@ -154,23 +249,63 @@ public class CircleController : MonoBehaviour
 		characterMarkSlots[a] = null;
 		characterMarkSlots[b] = null;
 
+		var shiftA = new Shift(doSiDo ? MoveType.DoSiDo : MoveType.Cross, characterDisplayA, a, b, circleCenter);
+		var shiftB = new Shift(doSiDo ? MoveType.DoSiDo : MoveType.Cross, characterDisplayB, b, a, circleCenter);
+
 		var t = 0f;
 		while (t < 1)
 		{
-			if (characterDisplayA != null)
-			{
-				characterDisplayA.transform.position = Vector3.Lerp(a.transform.position, b.transform.position, t);
-			}
-			if (characterDisplayB != null)
-			{
-				characterDisplayB.transform.position = Vector3.Lerp(b.transform.position, a.transform.position, t);
-			}
+			shiftA.Interpolate(t);
+			shiftB.Interpolate(t);
 			yield return new WaitForEndOfFrame();
 			t += Time.deltaTime / moveTime;
 		}
 
 		characterMarkSlots[a] = characterDisplayB;
 		characterMarkSlots[b] = characterDisplayA;
+	}
+
+	public IEnumerator DoRotate(Direction direction, CharacterMark skip = null)
+	{
+		var characterMarks = skip == null ? this.characterMarks : this.characterMarks.Except(Enumerable.Repeat(skip, 1)).ToList();
+		var shifts = new List<Shift>();
+
+		for (var i = 0; i < characterMarks.Count; i++)
+		{
+			var current = characterMarks[i];
+
+			var nextIndex = direction == Direction.Clockwise ? i + 1 : i - 1;
+			nextIndex += characterMarks.Count;
+			nextIndex %= characterMarks.Count;
+
+			var next = characterMarks[nextIndex];
+
+			var isDoSiDo = Mathf.Abs(this.characterMarks.IndexOf(current) - this.characterMarks.IndexOf(next)) > 1;
+
+			shifts.Add(new Shift(isDoSiDo ? MoveType.DoSiDo : MoveType.Shift, characterMarkSlots[current], current, next, circleCenter));
+		}
+
+		foreach (var mark in characterMarks)
+		{
+			characterMarkSlots[mark] = null;
+		}
+
+
+		var t = 0f;
+		while (t < 1)
+		{
+			foreach (var shift in shifts)
+			{
+				shift.Interpolate(t);
+			}
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime / moveTime;
+		}
+
+		foreach (var shift in shifts)
+		{
+			characterMarkSlots[shift.toMark] = shift.character;
+		}
 	}
 
 	private Vector2[] FindCircleCenter(Vector2 a, Vector2 b, float r)

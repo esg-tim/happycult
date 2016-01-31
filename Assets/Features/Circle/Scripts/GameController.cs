@@ -40,6 +40,7 @@ public class GameController : MonoBehaviour
 
 	public int startRoundTurns;
 	public int gainTurnsPerRound;
+	public int maxTurns = 15;
 
 	private List<CharacterData> goalCharacters = new List<CharacterData>();
 	public IEnumerable<CharacterData> currentGoalCharacters {
@@ -272,6 +273,7 @@ public class GameController : MonoBehaviour
 	{
 		var before = roundTurns;
 		roundTurns += gainTurnsPerRound;
+		roundTurns = Mathf.Min(roundTurns, maxTurns);
 		var remainingFeedback = 0;
 		if (addedTurns != null)
 		{

@@ -23,14 +23,13 @@ public class TurnsPanel : MonoBehaviour
 		isAnimatingTurnGain = true;
 
 		var t = 0f; 
-		var currentValue = Mathf.CeilToInt(Mathf.Lerp(turnsBefore, turnsAfter, t));
+		int currentValue = (int)Mathf.Lerp(turnsBefore, turnsAfter, t);
 		while (t < 1)
 		{
 			string.Format("{0}", currentValue);
 			yield return new WaitForEndOfFrame();
 			t += Time.deltaTime / 1.5f;
-			var lastValue = currentValue;
-			currentValue = Mathf.CeilToInt(Mathf.Lerp(turnsBefore, turnsAfter, t));
+			currentValue = (int)Mathf.Lerp(turnsBefore, turnsAfter, t);
 		}
 			
 		isAnimatingTurnGain = false;
@@ -41,7 +40,20 @@ public class TurnsPanel : MonoBehaviour
 	{
 		if (!isAnimatingTurnGain)
 		{
-			text.text = string.Format("{0}", Mathf.CeilToInt(gameController.roundTurnsRemaining));
+			var turns = gameController.roundTurnsRemaining;
+			text.text = string.Format("{0}", turns);
+			if (turns <= 3)
+			{
+				var time = (Time.time % 1f);
+				if (time > 0.5f)
+				{
+					text.transform.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 1.1f, (time - 0.5f) / 0.5f );
+				}
+				else
+				{
+					text.transform.localScale = Vector3.Lerp(Vector3.one * 1.1f, Vector3.one, time / 0.5f );
+				}
+			}
 		}
 	}
 

@@ -7,12 +7,20 @@ public class MenuController : MonoBehaviour
 	[SerializeField]
 	private CanvasGroup canvasGroup;
 
-	private Coroutine startGameCoroutine;
+	private Coroutine coroutine;
 	public void OnPlayPressed()
 	{
-		if (startGameCoroutine == null)
+		if (coroutine == null)
 		{
-			startGameCoroutine = StartCoroutine(StartGame());
+			coroutine = StartCoroutine(StartGame());
+		}
+	}
+
+	public void OnQuitPressed()
+	{
+		if (coroutine == null)
+		{
+			coroutine = StartCoroutine(Quit());
 		}
 	}
 
@@ -27,5 +35,18 @@ public class MenuController : MonoBehaviour
 		}
 
 		SceneManager.LoadScene("Main");
+	}
+
+	private IEnumerator Quit()
+	{
+		var t = 0f;
+		while (t < 1)
+		{
+			canvasGroup.alpha = 1.0f - t;
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+
+		Application.Quit();
 	}
 }

@@ -48,6 +48,10 @@ public class GameController : MonoBehaviour
 	public int gainTurnsPerRound;
 	public int maxTurns = 15;
 
+	public Image splashMessage;
+	public Sprite danceSplashMessage;
+	public Sprite partyOverSplashMessage;
+
 	private List<CharacterData> goalCharacters = new List<CharacterData>();
 	public IEnumerable<CharacterData> currentGoalCharacters {
 		get
@@ -161,6 +165,35 @@ public class GameController : MonoBehaviour
 		}
 	}
 
+	private IEnumerator SplashMessage(Sprite sprite, float delay = 0.5f)
+	{
+		splashMessage.sprite = sprite;
+		splashMessage.SetNativeSize();
+		splashMessage.color = Color.clear;
+
+		var t = 0f;
+		while (t < 1)
+		{
+			splashMessage.color = Color.Lerp(Color.clear, Color.white, t);
+			splashMessage.transform.localScale = Vector3.Lerp(Vector3.one * 0.9f, Vector3.one, t);
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime / 0.2f;
+		}
+
+		yield return new WaitForSeconds(delay);
+
+		t = 0f;
+		while (t < 1)
+		{
+			splashMessage.color = Color.Lerp(Color.white, Color.clear, t);
+			splashMessage.transform.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 0.9f, t);
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime / 0.2f;
+		}
+
+		splashMessage.color = Color.clear;
+	}
+
 	private void UpdateMoveState()
 	{
 		HandleRound();
@@ -260,6 +293,12 @@ public class GameController : MonoBehaviour
 			t += Time.deltaTime;
 		}
 
+		yield return new WaitForSeconds(0.2f);
+
+		SoundController.main.PlaySound("laugh");
+
+		yield return SplashMessage(danceSplashMessage);
+
 		yield return StartCoroutine(AddNewGoalCharacter());
 	}
 
@@ -295,6 +334,10 @@ public class GameController : MonoBehaviour
 
 	private IEnumerator GameOver()
 	{
+
+		SoundController.main.PlaySound("evil_summon");
+		yield return StartCoroutine(SplashMessage(partyOverSplashMessage, 4f));
+
 		var t = 0f;
 		while (t < 1)
 		{
@@ -514,6 +557,8 @@ public class GameController : MonoBehaviour
 		var shiftA = new Shift(doSiDo ? MoveType.DoSiDo : MoveType.Cross, characterDisplayA, a, b, circleCenter);
 		var shiftB = new Shift(doSiDo ? MoveType.DoSiDo : MoveType.Cross, characterDisplayB, b, a, circleCenter);
 
+		SoundController.main.PlaySound("swap");
+
 		var t = 0f;
 		while (t < 1)
 		{
@@ -574,6 +619,7 @@ public class GameController : MonoBehaviour
 			characterMarkSlots[mark] = null;
 		}
 
+		SoundController.main.PlaySound("swap");
 		var t = 0f;
 		while (t < 1)
 		{
@@ -629,7 +675,17 @@ public class GameController : MonoBehaviour
 			character.transform.SetParent(characterHolder);
 			characters.Add(character);
 
+			SoundController.main.PlaySound("succeed");
+
 			characterMarkSlots[targetMark] = character;
+
+			t = 0f;
+			while (t < 1)
+			{
+				character.displayImage.color = Color.Lerp(Color.clear, Color.white, t);
+				yield return new WaitForEndOfFrame();
+				t += Time.deltaTime / 0.4f;
+			}
 
 			yield return StartCoroutine(CheckBeef(character));
 
@@ -666,6 +722,12 @@ public class GameController : MonoBehaviour
 
 		if (removingCharacters.Count == 0)
 			yield break;
+
+		aggressor.ShowBeef();
+
+		yield return new WaitForSeconds(0.5f);
+
+		SoundController.main.PlaySound("disappear");
 
 		var t = 0f;
 		while (t < 1.0f)

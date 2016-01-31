@@ -5,7 +5,8 @@ public enum MoveType
 {
 	Cross,
 	Shift,
-	DoSiDo
+	DoSiDo,
+	None
 }
 
 public static class MoveTypeMath

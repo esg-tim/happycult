@@ -76,6 +76,12 @@ namespace UnityEngine.UI.Extensions
 			SetVerticesDirty();
 		}
 
+		public void SetPoints(Vector2[] points)
+		{
+			Points = points.ToArray();
+			SetVerticesDirty();
+		}
+
         protected override void OnPopulateMesh(VertexHelper vh)
         {
 			vh.Clear();

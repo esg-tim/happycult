@@ -30,6 +30,7 @@ public class GameController : MonoBehaviour
 
 	public List<GameMove> currentIncantation = new List<GameMove>();
 	public UILineRenderer incantationLine;
+	public UILineRenderer incantationPreview;
 
 	public CharacterData mainCharacterData;
 
@@ -118,12 +119,12 @@ public class GameController : MonoBehaviour
 		if (joyMag < 0.8f)
 		{
 			highlightedIndex = -1;
-			joystickIndicator.color = Color.Lerp(Color.clear, Color.white, Mathf.Min(joyMag, 0.8f));
+			joystickIndicator.GetComponent<CanvasGroup>().alpha = Mathf.Min(joyMag, 0.8f);
 		}
 		else
 		{
 			highlightedIndex = characterMarks.IndexOf(selectedMark);
-			joystickIndicator.color = Color.white;
+			joystickIndicator.GetComponent<CanvasGroup>().alpha = 1.0f;
 		}
 
 		foreach (var slot in characterMarkSlots)
@@ -132,10 +133,82 @@ public class GameController : MonoBehaviour
 				slot.Value.transform.position = slot.Key.transform.position;
 		}
 
+		MoveType type = MoveType.None;
+		Direction direction = Direction.Clockwise;
+
+		var startIndex = GetIndexOfCharacter(mainCharacter);
+		var endIndex = highlightedIndex;
+
+		var a = startIndex >= 0 && startIndex < characterMarks.Count ? characterMarks[startIndex] : null;
+		var b = endIndex >= 0 && endIndex < characterMarks.Count ? characterMarks[endIndex] : null;
+
+		if (a != null && b != null)
+		{
+			var difference = GetIndexDifference(startIndex, endIndex);
+			var absDiff = Mathf.Abs(difference);
+			Debug.Log(string.Format("Difference: {0}, {1} = {2}", startIndex, endIndex, difference));
+
+			if (absDiff == 1)
+			{
+				type = MoveType.Shift;
+				direction = difference > 0 ? Direction.Clockwise : Direction.CounterClockwise;
+
+				if (a != null && b != null) SetIncantationPreview( t => MoveTypeMath.EvaluateCircle(a.transform.position, b.transform.position, circleCenter.position, t, false) );
+			}
+			else if (absDiff == characterMarks.Count / 2)
+			{
+				type = MoveType.Cross;
+
+				if (a != null && b != null) SetIncantationPreview( t => MoveTypeMath.EvaluateLine(a.transform.position, b.transform.position, t) );
+			}
+			else if (absDiff > 1)
+			{
+				type = MoveType.DoSiDo;
+
+				if (a != null && b != null) SetIncantationPreview( t => MoveTypeMath.EvaluateCircle(a.transform.position, b.transform.position, circleCenter.position, t, true) );
+			}
+			else
+			{
+				ClearIncantationPreview();
+			}
+		}
+		else
+		{
+			ClearIncantationPreview();
+		}
+
+
 		if (eventCoroutine == null)
 		{
 			HandleRound();
-			HandleIncantInput(joyMag, joyVector);
+
+			if (Input.GetButton("Cross"))
+			{
+				switch(type)
+				{
+				case MoveType.Shift:
+					RunEvent(DoRotate(direction));
+					break;
+				case MoveType.DoSiDo:
+					RunEvent(DoSwap(a, b, true));
+					break;
+				case MoveType.Cross:
+					RunEvent(DoSwap(a, b, false));
+					break;
+				}
+
+				if (type != MoveType.None) 
+					roundTurns--;
+			}
+			else if (Input.GetButton("Incant"))
+			{
+				var index = highlightedIndex;
+				if (index != -1)
+				{
+					RunEvent(DoIncant(index));
+				}
+			}
+
 		}
 	}
 
@@ -239,62 +312,29 @@ public class GameController : MonoBehaviour
 		}
 	}
 
+	private void ClearIncantationPreview()
+	{
+		incantationPreview.Clear();
+	}
+
+	private void SetIncantationPreview(Func<float, Vector2> line)
+	{
+		incantationPreview.SetPoints((from i in Enumerable.Range(0, 100) select TransformIncantationPoint(line(i / 100.0f))).ToArray()); 
+	}
+
 	private void AddIncantationPoint(Vector3 point)
+	{
+		incantationLine.AddPoint(TransformIncantationPoint(point));
+	}
+
+	private Vector2 TransformIncantationPoint(Vector3 point)
 	{
 		Vector2 transformed;
 		RectTransformUtility.ScreenPointToLocalPointInRectangle(incantationLine.rectTransform, (RectTransformUtility.WorldToScreenPoint(null, point)), null, out transformed);
 		var rect = incantationLine.rectTransform.rect;
 		var offset = (transformed - rect.min);
 		var scaled = new Vector2(offset.x / rect.width, offset.y / rect.height);
-		incantationLine.AddPoint(scaled);
-	}
-
-	private void HandleIncantInput(float joyMag, Vector2 joyVector)
-	{
-		if (joyMag > 0.8f)
-		{
-			if (Input.GetButton("Cross"))
-			{
-				var startIndex = GetIndexOfCharacter(mainCharacter);
-				var endIndex = highlightedIndex;
-
-				if (endIndex != -1)
-				{
-					var a = characterMarks[startIndex];
-					var b = characterMarks[endIndex];
-
-					if (a != null || b != null)
-					{
-						var difference = GetIndexDifference(startIndex, endIndex);
-						var absDiff = Mathf.Abs(difference);
-						Debug.Log(string.Format("Difference: {0}, {1} = {2}", startIndex, endIndex, difference));
-
-						if (absDiff == 1)
-						{
-							RunEvent(DoRotate(difference > 0 ? Direction.Clockwise : Direction.CounterClockwise));
-						}
-						else if (absDiff == characterMarks.Count / 2)
-						{
-							RunEvent(DoSwap(a, b, false));
-						}
-						else if (absDiff > 1)
-						{
-							RunEvent(DoSwap(a, b, true));
-						}
-
-						roundTurns--;
-					}
-				}
-			}
-			else if (Input.GetButton("Incant"))
-			{
-				var index = highlightedIndex;
-				if (index != -1)
-				{
-					RunEvent(DoIncant(index));
-				}
-			}
-		}
+		return scaled;
 	}
 
 	public int GetIndexDifference(int startIndex, int endIndex)

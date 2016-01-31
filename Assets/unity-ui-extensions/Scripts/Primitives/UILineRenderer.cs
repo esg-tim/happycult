@@ -70,6 +70,12 @@ namespace UnityEngine.UI.Extensions
 			SetVerticesDirty();
 		}
 
+		public void Clear()
+		{
+			Points = new Vector2[0];
+			SetVerticesDirty();
+		}
+
         protected override void OnPopulateMesh(VertexHelper vh)
         {
 			vh.Clear();

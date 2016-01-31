@@ -12,12 +12,6 @@ public enum Direction
 	CounterClockwise
 }
 
-public enum GameState
-{
-	Incant,
-	Summon
-}
-
 public class CircleController : MonoBehaviour 
 {
 	public float moveTime = 1;
@@ -31,11 +25,10 @@ public class CircleController : MonoBehaviour
 
 	public Image joystickIndicator;
 
+	public List<GameMove> currentIncantation = new List<GameMove>();
 	public UILineRenderer incantationLine;
 
 	public CharacterData mainCharacterData;
-
-	private GameState gameState;
 
 	private List<CharacterData> requiredCharacters;
 
@@ -53,8 +46,6 @@ public class CircleController : MonoBehaviour
 
 	public void Start()
 	{
-		gameState = GameState.Incant;
-
 		foreach (var markTransform in characterMarkTransforms)
 		{
 			characterMarks.Add(new CharacterMark() { transform = markTransform });
@@ -99,14 +90,15 @@ public class CircleController : MonoBehaviour
 
 		if (moveCoroutine == null)
 		{
-			if (gameState == GameState.Incant)
-			{
-				HandleIncantInput(joyMag, joyVector);
-			}
-			else if (gameState == GameState.Summon)
-			{
-				
-			}
+			HandleIncantInput(joyMag, joyVector);
+		}
+	}
+
+	private void OnCharacterMoved(Character character, MoveType moveType, CharacterMark fromMark, CharacterMark toMark)
+	{
+		if (character == mainCharacter)
+		{
+			currentIncantation.Add(new GameMove() { type = moveType, fromMark = fromMark, toMark = toMark, circle = this }); 
 		}
 	}
 
@@ -122,7 +114,7 @@ public class CircleController : MonoBehaviour
 
 	private void HandleIncantInput(float joyMag, Vector2 joyVector)
 	{
-		if (Input.GetButton("Fire4") && joyMag > 0.8f)
+		if (Input.GetButton("Swap") && joyMag > 0.8f)
 		{
 			var index = GetIndexInDirection(joyVector);
 
@@ -140,7 +132,7 @@ public class CircleController : MonoBehaviour
 				}
 			}
 		}
-		else if (Input.GetButton("Fire1") && joyMag > 0.8f)
+		else if (Input.GetButton("Cross") && joyMag > 0.8f)
 		{
 			var index = GetIndexInDirection(joyVector);
 
@@ -157,7 +149,7 @@ public class CircleController : MonoBehaviour
 				}
 			}
 		}
-		else if (Input.GetButton("Fire3"))
+		else if (Input.GetButton("Shift Clockwise"))
 		{
 			if (joyMag > 0.8f)
 			{
@@ -174,7 +166,7 @@ public class CircleController : MonoBehaviour
 			}
 
 		}
-		else if (Input.GetButton("Fire2"))
+		else if (Input.GetButton("Shift CounterClockwise"))
 		{
 			if (joyMag > 0.8f)
 			{
@@ -187,6 +179,14 @@ public class CircleController : MonoBehaviour
 			else
 			{
 				RunMove(DoRotate(Direction.CounterClockwise));
+			}
+		}
+		else if (Input.GetButton("Incant") && joyMag > 0.8f)
+		{
+			var index = GetIndexInDirection(joyVector);
+			if (index != -1)
+			{
+				RunMove(DoIncant(index));
 			}
 		}
 	}
@@ -237,20 +237,6 @@ public class CircleController : MonoBehaviour
 		moveCoroutine = null;
 	}
 
-	/*[SerializeField]
-	private float incantationLineFidelity = 0.1f;
-	public void AddFullLine(Func<float, Vector2> func, float length)
-	{
-		var segmentCount = length / incantationLineFidelity;
-
-		for (var i = 0; i < segmentCount - 1; i++)
-		{
-			incantationLine.AddPoint(func(i / (float)segmentCount));
-		}
-
-		incantationLine.AddPoint(func(1.0f));
-	}*/
-
 	private class Shift
 	{
 		public Shift(MoveType moveType, Character character, CharacterMark fromMark, CharacterMark toMark, Transform circleCenter )
@@ -290,6 +276,27 @@ public class CircleController : MonoBehaviour
 		}
 	}
 
+	public class GameMove
+	{
+		public MoveType type;
+		public CircleController.CharacterMark fromMark;
+		public CircleController.CharacterMark toMark;
+		public CircleController circle;
+
+		public bool MatchDataMove(IncantationData.Move move)
+		{
+			var fromMarkIndex = circle.characterMarks.IndexOf(fromMark);
+			var toMarkIndex = circle.characterMarks.IndexOf(toMark);
+
+			var directionIsClockwise = Vector2Extensions.SignedAngle((fromMark.transform.position - circle.circleCenter.position), (toMark.transform.position - circle.circleCenter.position)) > 0;
+			var direction = directionIsClockwise ? Direction.Clockwise : Direction.CounterClockwise;
+
+			Debug.Log("Move Compare: " + type + " vs " + move.type + " dir: " + direction + " vs " + move.direction);
+
+			return type == move.type && (type == MoveType.Cross || direction == move.direction);
+		}
+	}
+
 	public IEnumerator DoSwap(CharacterMark a, CharacterMark b, bool doSiDo)
 	{
 		var characterDisplayA = characterMarkSlots[a];
@@ -323,6 +330,12 @@ public class CircleController : MonoBehaviour
 
 		characterMarkSlots[a] = characterDisplayB;
 		characterMarkSlots[b] = characterDisplayA;
+
+		OnCharacterMoved(characterDisplayA, doSiDo ? MoveType.DoSiDo : MoveType.Cross, a, b);
+		OnCharacterMoved(characterDisplayB, doSiDo ? MoveType.DoSiDo : MoveType.Cross, b, a);
+
+		yield return StartCoroutine(CheckBeef(characterDisplayA));
+		yield return StartCoroutine(CheckBeef(characterDisplayB));
 	}
 
 	public IEnumerator DoRotate(Direction direction, CharacterMark skip = null)
@@ -342,7 +355,7 @@ public class CircleController : MonoBehaviour
 
 			var currentRealIndex = this.characterMarks.IndexOf(current);
 			var currentNextIndex = this.characterMarks.IndexOf(next);
-			var isDoSiDo = !((currentRealIndex - 1) % this.characterMarks.Count == currentNextIndex ||
+			var isDoSiDo = !((currentRealIndex - 1 + this.characterMarks.Count) % this.characterMarks.Count == currentNextIndex ||
 				(currentRealIndex + 1) % this.characterMarks.Count == currentNextIndex);
 
 			shifts.Add(new Shift(isDoSiDo ? MoveType.DoSiDo : MoveType.Shift, characterMarkSlots[current], current, next, circleCenter));
@@ -371,6 +384,102 @@ public class CircleController : MonoBehaviour
 		foreach (var shift in shifts)
 		{
 			characterMarkSlots[shift.toMark] = shift.character;
+
+			OnCharacterMoved(shift.character, shift.moveType, shift.fromMark, shift.toMark);
+
+			yield return StartCoroutine(CheckBeef(shift.character));
+		}
+	}
+
+	[SerializeField]
+	private float glowTime = 1.0f;
+	private IEnumerator DoIncant(int targetIndex)
+	{
+		var incantation = this.currentIncantation;
+		this.currentIncantation = new List<GameMove>();
+
+		var originalIncantationLineColor = incantationLine.color;
+
+		var data = characterMarkSlots[characterMarks[targetIndex]] != null ? IncantationData.GetIncantationData(incantation) : null;
+
+		var t = 0f;
+		while (t < 1)
+		{
+			this.incantationLine.color = Color.Lerp(originalIncantationLineColor, data != null ? Color.white : Color.red, t);
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime / glowTime;
+		}
+
+		this.incantationLine.color = originalIncantationLineColor;
+
+		incantationLine.Clear();
+
+		if (data != null)
+		{
+			var targetMark = characterMarks[targetIndex];
+
+			var character = Character.Create(data.summon);
+			character.transform.SetParent(characterHolder);
+			characters.Add(character);
+
+			characterMarkSlots[targetMark] = character;
+
+			yield return StartCoroutine(CheckBeef(character));
+		}
+	}
+
+	[SerializeField]
+	private float removalFadeTime = 0.2f;
+	private IEnumerator CheckBeef(Character aggressor)
+	{
+		var agressorIndex = GetIndexOfCharacter(aggressor);
+		var left = (agressorIndex - 1 + characters.Count()) % characters.Count();
+		var right = agressorIndex + 1;
+		var leftCharacter = GetCharacterAtIndex(left);
+		var rightCharacter = GetCharacterAtIndex(right);
+
+		var removingCharacters = new List<Character>();
+
+		if (aggressor.character.beefCharacter == leftCharacter.character)
+		{
+			removingCharacters.Add(leftCharacter);
+		}
+
+		if (aggressor.character.beefCharacter == rightCharacter.character)
+		{
+			removingCharacters.Add(rightCharacter);
+		}
+
+		var t = 0f;
+		while (t < 1.0f)
+		{
+			foreach (var character in removingCharacters)
+			{
+				character.displayImage.color = Color.Lerp(Color.white, Color.red, t);
+			}
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+
+		t = 0f;
+		while (t < 1.0f)
+		{
+			foreach (var character in removingCharacters)
+			{
+				character.displayImage.color = Color.Lerp(Color.red, new Color(1f, 0f, 0f, 0f), t);
+			}
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+
+		foreach (var character in removingCharacters)
+		{
+			characters.Remove(character);
+			foreach (var key in characterMarkSlots.Keys.ToArray())
+			{
+				if (characterMarkSlots[key] == character)
+					characterMarkSlots.Remove(key);
+			}
 		}
 	}
 

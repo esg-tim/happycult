@@ -3,11 +3,19 @@ using System.Collections.Generic;
 using System.Collections;
 using System.Linq;
 using UnityEngine.UI;
+using UnityEngine.UI.Extensions;
+using System;
 
 public enum Direction
 {
 	Clockwise,
 	CounterClockwise
+}
+
+public enum GameState
+{
+	Incant,
+	Summon
 }
 
 public class CircleController : MonoBehaviour 
@@ -23,8 +31,15 @@ public class CircleController : MonoBehaviour
 
 	public Image joystickIndicator;
 
+	public UILineRenderer incantationLine;
+
+	public CharacterData mainCharacterData;
+
+	private GameState gameState;
+
 	private List<CharacterData> requiredCharacters;
 
+	private Character mainCharacter;
 	private List<Character> characters = new List<Character>();
 	private List<CharacterMark> characterMarks = new List<CharacterMark>();
 	private Dictionary<CharacterMark, Character> characterMarkSlots = new Dictionary<CharacterMark, Character>();
@@ -38,21 +53,18 @@ public class CircleController : MonoBehaviour
 
 	public void Start()
 	{
+		gameState = GameState.Incant;
+
 		foreach (var markTransform in characterMarkTransforms)
 		{
 			characterMarks.Add(new CharacterMark() { transform = markTransform });
 		}
+			
+		mainCharacter = Character.Create(mainCharacterData);
 
-		var allCharacterData = Resources.LoadAll<CharacterData>("");
+		characters.Add(mainCharacter);
 
-		foreach (var characterData in allCharacterData.PickRandom(startingCharacterCount))
-		{
-			var character = Character.Create(characterData);
-
-			characters.Add(character);
-
-			character.transform.SetParent(characterHolder);
-		}
+		mainCharacter.transform.SetParent(characterHolder);
 
 		var characterMarksToAddTo = characterMarks.TakeRandom(characters.Count).GetEnumerator();
 		foreach (var character in characters)
@@ -66,7 +78,6 @@ public class CircleController : MonoBehaviour
 		{
 			characterMarkSlots.Add(mark, null);
 		}
-
 	}
 
 	public void Update()
@@ -80,81 +91,103 @@ public class CircleController : MonoBehaviour
 
 		indicatorRectTransform.anchoredPosition = joyVector * indicatorRectTransform.parent.GetComponent<RectTransform>().rect.width / 2;
 
-		if (moveCoroutine == null)
-		{
-			if (Input.GetButton("Fire4") && joyMag > 0.8f)
-			{
-				var index = GetIndexInDirection(joyVector);
-
-				if (index != -1)
-				{
-					var left = ((index - 1) + characterMarks.Count) % characterMarks.Count;
-					var right = (index + 1) % characterMarks.Count;
-
-					var a = characterMarks[left];
-					var b = characterMarks[right];
-
-					if (a != null || b != null)
-					{
-						RunMove(DoSwap(a, b, true));
-					}
-				}
-			}
-			else if (Input.GetButton("Fire1") && joyMag > 0.8f)
-			{
-				var index = GetIndexInDirection(joyVector);
-
-				if (index != -1)
-				{
-					var across = (index + characterMarks.Count / 2) % characterMarks.Count;
-
-					var a = characterMarks[index];
-					var b = characterMarks[across];
-
-					if (a != null || b != null)
-					{
-						RunMove(DoSwap(a, b, false));
-					}
-				}
-			}
-			else if (Input.GetButton("Fire3"))
-			{
-				if (joyMag > 0.8f)
-				{
-					var index = GetIndexInDirection(joyVector);
-
-					if (index != -1)
-					{
-						RunMove(DoRotate(Direction.Clockwise, characterMarks[index]));
-					}
-				}
-				else
-				{
-					RunMove(DoRotate(Direction.Clockwise));
-				}
-
-			}
-			else if (Input.GetButton("Fire2"))
-			{
-				if (joyMag > 0.8f)
-				{
-					var index = GetIndexInDirection(joyVector);
-					if (index != -1)
-					{
-						RunMove(DoRotate(Direction.CounterClockwise, characterMarks[index]));
-					}
-				}
-				else
-				{
-					RunMove(DoRotate(Direction.CounterClockwise));
-				}
-			}
-		}
-
 		foreach (var slot in characterMarkSlots)
 		{
 			if (slot.Value != null) 
 				slot.Value.transform.position = slot.Key.transform.position;
+		}
+
+		if (moveCoroutine == null)
+		{
+			if (gameState == GameState.Incant)
+			{
+				HandleIncantInput(joyMag, joyVector);
+			}
+			else if (gameState == GameState.Summon)
+			{
+				
+			}
+		}
+	}
+
+	private void AddIncantationPoint(Vector3 point)
+	{
+		Vector2 transformed;
+		RectTransformUtility.ScreenPointToLocalPointInRectangle(incantationLine.rectTransform, (RectTransformUtility.WorldToScreenPoint(null, point)), null, out transformed);
+		var rect = incantationLine.rectTransform.rect;
+		var offset = (transformed - rect.min);
+		var scaled = new Vector2(offset.x / rect.width, offset.y / rect.height);
+		incantationLine.AddPoint(scaled);
+	}
+
+	private void HandleIncantInput(float joyMag, Vector2 joyVector)
+	{
+		if (Input.GetButton("Fire4") && joyMag > 0.8f)
+		{
+			var index = GetIndexInDirection(joyVector);
+
+			if (index != -1)
+			{
+				var left = ((index - 1) + characterMarks.Count) % characterMarks.Count;
+				var right = (index + 1) % characterMarks.Count;
+
+				var a = characterMarks[left];
+				var b = characterMarks[right];
+
+				if (a != null || b != null)
+				{
+					RunMove(DoSwap(a, b, true));
+				}
+			}
+		}
+		else if (Input.GetButton("Fire1") && joyMag > 0.8f)
+		{
+			var index = GetIndexInDirection(joyVector);
+
+			if (index != -1)
+			{
+				var across = (index + characterMarks.Count / 2) % characterMarks.Count;
+
+				var a = characterMarks[index];
+				var b = characterMarks[across];
+
+				if (a != null || b != null)
+				{
+					RunMove(DoSwap(a, b, false));
+				}
+			}
+		}
+		else if (Input.GetButton("Fire3"))
+		{
+			if (joyMag > 0.8f)
+			{
+				var index = GetIndexInDirection(joyVector);
+
+				if (index != -1)
+				{
+					RunMove(DoRotate(Direction.Clockwise, characterMarks[index]));
+				}
+			}
+			else
+			{
+				RunMove(DoRotate(Direction.Clockwise));
+			}
+
+		}
+		else if (Input.GetButton("Fire2"))
+		{
+			if (joyMag > 0.8f)
+			{
+				var index = GetIndexInDirection(joyVector);
+				if (index != -1)
+				{
+					RunMove(DoRotate(Direction.CounterClockwise, characterMarks[index]));
+				}
+			}
+			else
+			{
+				RunMove(DoRotate(Direction.CounterClockwise));
+			}
 		}
 	}
 
@@ -204,6 +237,20 @@ public class CircleController : MonoBehaviour
 		moveCoroutine = null;
 	}
 
+	/*[SerializeField]
+	private float incantationLineFidelity = 0.1f;
+	public void AddFullLine(Func<float, Vector2> func, float length)
+	{
+		var segmentCount = length / incantationLineFidelity;
+
+		for (var i = 0; i < segmentCount - 1; i++)
+		{
+			incantationLine.AddPoint(func(i / (float)segmentCount));
+		}
+
+		incantationLine.AddPoint(func(1.0f));
+	}*/
+
 	private class Shift
 	{
 		public Shift(MoveType moveType, Character character, CharacterMark fromMark, CharacterMark toMark, Transform circleCenter )
@@ -222,9 +269,9 @@ public class CircleController : MonoBehaviour
 
 		private Transform circleCenter;
 
-		public void Interpolate(float t)
+		public Vector2 Interpolate(float t)
 		{
-			if (character == null) return;
+			if (character == null) return Vector2.zero;
 
 			switch (moveType)
 			{
@@ -238,6 +285,8 @@ public class CircleController : MonoBehaviour
 				character.transform.position = MoveTypeMath.EvaluateCircle(fromMark.transform.position, toMark.transform.position, circleCenter.position, t, false);
 				break;
 			}
+
+			return character.transform.position;
 		}
 	}
 
@@ -255,8 +304,19 @@ public class CircleController : MonoBehaviour
 		var t = 0f;
 		while (t < 1)
 		{
-			shiftA.Interpolate(t);
-			shiftB.Interpolate(t);
+			var ptA = shiftA.Interpolate(t);
+			var ptB = shiftB.Interpolate(t);
+
+			if (characterDisplayA == mainCharacter)
+			{
+				AddIncantationPoint(ptA);
+			}
+
+			if (characterDisplayB == mainCharacter)
+			{
+				AddIncantationPoint(ptB);
+			}
+
 			yield return new WaitForEndOfFrame();
 			t += Time.deltaTime / moveTime;
 		}
@@ -280,7 +340,10 @@ public class CircleController : MonoBehaviour
 
 			var next = characterMarks[nextIndex];
 
-			var isDoSiDo = Mathf.Abs(this.characterMarks.IndexOf(current) - this.characterMarks.IndexOf(next)) > 1;
+			var currentRealIndex = this.characterMarks.IndexOf(current);
+			var currentNextIndex = this.characterMarks.IndexOf(next);
+			var isDoSiDo = !((currentRealIndex - 1) % this.characterMarks.Count == currentNextIndex ||
+				(currentRealIndex + 1) % this.characterMarks.Count == currentNextIndex);
 
 			shifts.Add(new Shift(isDoSiDo ? MoveType.DoSiDo : MoveType.Shift, characterMarkSlots[current], current, next, circleCenter));
 		}
@@ -290,13 +353,16 @@ public class CircleController : MonoBehaviour
 			characterMarkSlots[mark] = null;
 		}
 
-
 		var t = 0f;
 		while (t < 1)
 		{
 			foreach (var shift in shifts)
 			{
-				shift.Interpolate(t);
+				var pt = shift.Interpolate(t);
+				if (shift.character == mainCharacter)
+				{
+					AddIncantationPoint(pt);
+				}
 			}
 			yield return new WaitForEndOfFrame();
 			t += Time.deltaTime / moveTime;

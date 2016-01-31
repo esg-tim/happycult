@@ -19,6 +19,8 @@ public class SoundController : MonoBehaviour
 		}
 	}
 
+	public AudioSource musicSource;
+
 	public void Start()
 	{
 		allAudioSources = new Dictionary<string, AudioSource>();
@@ -27,6 +29,30 @@ public class SoundController : MonoBehaviour
 		{
 			allAudioSources.Add(source.clip.name, source);
 		}
+	}
+
+	public void StartMusic()
+	{
+		musicSource.loop = true;
+
+		musicSource.Play();
+	}
+
+	public void StopMusic()
+	{
+		StartCoroutine(FadeOutMusic()); 
+	}
+
+	private IEnumerator FadeOutMusic()
+	{
+		var t = 0f;
+		while (t < 1.0f)
+		{
+			musicSource.volume = Mathf.Lerp(1.0f, 0.0f, t);
+			yield return new WaitForEndOfFrame();
+			t += Time.deltaTime;
+		}
+		musicSource.Stop();
 	}
 
 	public void PlaySound(string name)

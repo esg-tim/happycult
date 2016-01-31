@@ -295,6 +295,8 @@ public class GameController : MonoBehaviour
 
 		yield return new WaitForSeconds(0.2f);
 
+		SoundController.main.StartMusic();
+
 		SoundController.main.PlaySound("laugh");
 
 		yield return SplashMessage(danceSplashMessage);
@@ -334,6 +336,8 @@ public class GameController : MonoBehaviour
 
 	private IEnumerator GameOver()
 	{
+
+		SoundController.main.StopMusic();
 
 		SoundController.main.PlaySound("evil_summon");
 		yield return StartCoroutine(SplashMessage(partyOverSplashMessage, 4f));

@@ -19,12 +19,12 @@ public class IncantationData : ScriptableObject
 		}
 	}
 
-	public static IncantationData GetIncantationData(List<CircleController.GameMove> incantation)
+	public static IncantationData GetIncantationData(List<GameController.GameMove> incantation)
 	{
 		return allIncantationData.FirstOrDefault(x => x.Matches(incantation));
 	}
 
-	private bool Matches(List<CircleController.GameMove> incantation)
+	private bool Matches(List<GameController.GameMove> incantation)
 	{
 		if (isCycle)
 		{
@@ -42,7 +42,7 @@ public class IncantationData : ScriptableObject
 		return false;
 	}
 
-	private bool Match(IEnumerable<CircleController.GameMove> gameMoves, IEnumerable<Move> dataMoves)
+	private bool Match(IEnumerable<GameController.GameMove> gameMoves, IEnumerable<Move> dataMoves)
 	{
 		if (gameMoves.Count() != dataMoves.Count())
 			return false;
@@ -71,11 +71,9 @@ public class IncantationData : ScriptableObject
 	{
 		for (var i = 0; i < moves.Count; i++)
 		{
-			yield return moves[number + i % moves.Count];
+			yield return moves[(number + i) % moves.Count];
 		}
 	}
-
-
 
 	[Serializable]
 	public class Move

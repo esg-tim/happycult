@@ -14,4 +14,6 @@ public class PrefabSettings : ScriptableObject
 	}
 
 	public GameObject characterDisplayPrefab;
+
+	public GameObject singleGoalDisplayPrefab; 
 }

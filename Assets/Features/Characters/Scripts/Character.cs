@@ -10,17 +10,17 @@ public class Character : MonoBehaviour
 		go.name = character.name;
 
 		var component = go.GetComponent<Character>();
-		component.character = character;
+		component.characterData = character;
 
 		return component;
 	}
 
-	public CharacterData character;
+	public CharacterData characterData;
 
 	public Image displayImage;
 
 	public void Start()
 	{
-		displayImage.sprite = character.image;
+		displayImage.sprite = characterData.image;
 	}
 }

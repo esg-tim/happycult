@@ -71,11 +71,9 @@ public class IncantationData : ScriptableObject
 	{
 		for (var i = 0; i < moves.Count; i++)
 		{
-			yield return moves[number + i % moves.Count];
+			yield return moves[(number + i) % moves.Count];
 		}
 	}
-
-
 
 	[Serializable]
 	public class Move

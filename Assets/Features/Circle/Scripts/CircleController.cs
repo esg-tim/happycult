@@ -400,7 +400,7 @@ public class CircleController : MonoBehaviour
 
 		var originalIncantationLineColor = incantationLine.color;
 
-		var data = characterMarkSlots[characterMarks[targetIndex]] != null ? IncantationData.GetIncantationData(incantation) : null;
+		var data = characterMarkSlots[characterMarks[targetIndex]] == null ? IncantationData.GetIncantationData(incantation) : null;
 
 		var t = 0f;
 		while (t < 1)
@@ -432,23 +432,31 @@ public class CircleController : MonoBehaviour
 	private float removalFadeTime = 0.2f;
 	private IEnumerator CheckBeef(Character aggressor)
 	{
+		if (aggressor == null)
+		{
+			yield break;
+		}
+
 		var agressorIndex = GetIndexOfCharacter(aggressor);
-		var left = (agressorIndex - 1 + characters.Count()) % characters.Count();
+		var left = (agressorIndex - 1 + characterMarks.Count) % characterMarks.Count;
 		var right = agressorIndex + 1;
 		var leftCharacter = GetCharacterAtIndex(left);
 		var rightCharacter = GetCharacterAtIndex(right);
 
 		var removingCharacters = new List<Character>();
 
-		if (aggressor.character.beefCharacter == leftCharacter.character)
+		if (leftCharacter != null && aggressor.character.beefCharacter == leftCharacter.character)
 		{
 			removingCharacters.Add(leftCharacter);
 		}
 
-		if (aggressor.character.beefCharacter == rightCharacter.character)
+		if (rightCharacter != null && aggressor.character.beefCharacter == rightCharacter.character)
 		{
 			removingCharacters.Add(rightCharacter);
 		}
+
+		if (removingCharacters.Count == 0)
+			yield break;
 
 		var t = 0f;
 		while (t < 1.0f)
@@ -478,7 +486,7 @@ public class CircleController : MonoBehaviour
 			foreach (var key in characterMarkSlots.Keys.ToArray())
 			{
 				if (characterMarkSlots[key] == character)
-					characterMarkSlots.Remove(key);
+					characterMarkSlots[key] = null;
 			}
 		}
 	}

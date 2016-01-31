@@ -35,10 +35,10 @@ public class GameController : MonoBehaviour
 
 	public int goalCharacterNumber = 3;
 	public Action<Action> goalCharactersChanged;
-	public Action<float, float, Action> addedTime;
+	public Action<int, int, Action> addedTurns;
 
-	public float startRoundTime;
-	public float gainTimePerRound;
+	public int startRoundTurns;
+	public int gainTurnsPerRound;
 
 	private List<CharacterData> goalCharacters = new List<CharacterData>();
 	public IEnumerable<CharacterData> currentGoalCharacters {
@@ -86,21 +86,45 @@ public class GameController : MonoBehaviour
 			characterMarkSlots.Add(mark, null);
 		}
 
-		roundTime = startRoundTime;
+		roundTurns = startRoundTurns;
 
 		RunEvent(StartGame());
 	}
 
+	private int highlightedIndex;
 	public void Update()
 	{
 		var joyVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
 
 		var joyMag = joyVector.magnitude;
-		joystickIndicator.color = Color.Lerp(Color.clear, Color.white, joyMag);
 
 		var indicatorRectTransform = joystickIndicator.GetComponent<RectTransform>();
+	
+		var joyPos = joyVector * indicatorRectTransform.parent.GetComponent<RectTransform>().rect.width / 2 + (Vector2)indicatorRectTransform.position;
+		var orderedList = (from mark in characterMarks select new { mark = mark, distance = ((Vector2)mark.transform.position - joyPos).sqrMagnitude }).ToList();
+		orderedList.Sort((x, y) => (int)Mathf.Sign(x.distance - y.distance));
 
-		indicatorRectTransform.anchoredPosition = joyVector * indicatorRectTransform.parent.GetComponent<RectTransform>().rect.width / 2;
+		var selectedMark = orderedList.First().mark;
+
+		Vector2 finalPos;
+		RectTransformUtility.ScreenPointToLocalPointInRectangle(
+			indicatorRectTransform.parent.GetComponent<RectTransform>(), 
+			RectTransformUtility.WorldToScreenPoint(null, selectedMark.transform.position),
+			null,
+			out finalPos);
+		
+		indicatorRectTransform.anchoredPosition = finalPos;
+
+		if (joyMag < 0.8f)
+		{
+			highlightedIndex = -1;
+			joystickIndicator.color = Color.Lerp(Color.clear, Color.white, Mathf.Min(joyMag, 0.8f));
+		}
+		else
+		{
+			highlightedIndex = characterMarks.IndexOf(selectedMark);
+			joystickIndicator.color = Color.white;
+		}
 
 		foreach (var slot in characterMarkSlots)
 		{
@@ -128,19 +152,18 @@ public class GameController : MonoBehaviour
 		yield return StartCoroutine(AddNewGoalCharacter());
 	}
 
-	private float roundTime = float.NaN;
-	public float roundTimeRemaining
+	private int roundTurns = 0;
+	public int roundTurnsRemaining
 	{
 		get
 		{
-			return roundTime;
+			return roundTurns;
 		}
 	}
 
 	private void HandleRound()
 	{
-		roundTime -= Time.deltaTime;
-		if (roundTime <= 0)
+		if (roundTurns <= 0)
 		{
 			RunEvent(GameOver());
 			return;
@@ -174,14 +197,14 @@ public class GameController : MonoBehaviour
 
 	private IEnumerator RoundSuccess()
 	{
-		var before = roundTime;
-		roundTime += gainTimePerRound;
+		var before = roundTurns;
+		roundTurns += gainTurnsPerRound;
 		var remainingFeedback = 0;
-		if (addedTime != null)
+		if (addedTurns != null)
 		{
-			remainingFeedback = addedTime.GetInvocationList().Length;
+			remainingFeedback = addedTurns.GetInvocationList().Length;
 
-			addedTime(before, roundTime, () => remainingFeedback--);
+			addedTurns(before, roundTurns, () => remainingFeedback--);
 		}
 		while (remainingFeedback > 0)
 			yield return new WaitForEndOfFrame();
@@ -233,7 +256,7 @@ public class GameController : MonoBehaviour
 			if (Input.GetButton("Cross"))
 			{
 				var startIndex = GetIndexOfCharacter(mainCharacter);
-				var endIndex = GetIndexInDirection(joyVector);
+				var endIndex = highlightedIndex;
 
 				if (endIndex != -1)
 				{
@@ -258,12 +281,14 @@ public class GameController : MonoBehaviour
 						{
 							RunEvent(DoSwap(a, b, true));
 						}
+
+						roundTurns--;
 					}
 				}
 			}
 			else if (Input.GetButton("Incant"))
 			{
-				var index = GetIndexInDirection(joyVector);
+				var index = highlightedIndex;
 				if (index != -1)
 				{
 					RunEvent(DoIncant(index));
@@ -300,14 +325,7 @@ public class GameController : MonoBehaviour
 		var degreesBetweenMarks = 360.0f / characterMarks.Count;
 		var index = joyDirection / degreesBetweenMarks;
 		var portion = index - (int)index;
-		if (portion < 0.3f || portion > 0.7f)
-		{
-			return Mathf.RoundToInt(index) % characterMarks.Count;
-		}
-		else
-		{
-			return -1;
-		}
+		return Mathf.RoundToInt(index) % characterMarks.Count;
 	}
 
 	public int GetIndexOfCharacter(Character character)
